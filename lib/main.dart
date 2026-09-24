@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/home_page.dart';
 
-void main() {
+const supabaseURL = 'https://cahjzbzcdvotglbymdko.supabase.co';
+const supabaseKey = 'sb_publishable_kSnntPVp1YgEVobV6jTZbg_HjBvVA_T';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await Supabase.initialize(
+    url: supabaseURL,
+    anonKey: supabaseKey, 
+  );
   runApp(const MyApp());
 }
 
