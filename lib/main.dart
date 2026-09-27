@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'audio/oboe_engine.dart';
 import 'pages/home_page.dart';
 
 const supabaseURL = 'https://cahjzbzcdvotglbymdko.supabase.co';
@@ -9,6 +10,8 @@ const supabaseKey = 'sb_publishable_kSnntPVp1YgEVobV6jTZbg_HjBvVA_T';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  OboeEngine.init();
+
   await Supabase.initialize(
     url: supabaseURL,
     anonKey: supabaseKey, 
