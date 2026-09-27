@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'audio/oboe_engine.dart';
 import 'pages/home_page.dart';
-
-const supabaseURL = 'https://cahjzbzcdvotglbymdko.supabase.co';
-const supabaseKey = 'sb_publishable_kSnntPVp1YgEVobV6jTZbg_HjBvVA_T';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Load environment variables from .env
+  await dotenv.load(fileName: ".env");
+
+  OboeEngine.init();
+
   await Supabase.initialize(
-    url: supabaseURL,
-    anonKey: supabaseKey, 
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '', 
   );
   runApp(const MyApp());
 }
