@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../audio/note_duration.dart';
 import '../audio/note_event.dart';
+import '../plugins/oboe_engine.dart';
 import '../audio/player_pool.dart';
 import '../audio/tempo.dart';
 import '../audio/tone_synth.dart';
@@ -53,13 +54,18 @@ class _SasandoPageState extends State<SasandoPage> {
 
   void _pluck(int index) {
     if (index < 0 || index >= _stringFreqs.length) return;
-    final double ms = beatsToMilliseconds(_selectedDuration.beats);
-    final wav = ToneSynth.generate(
-      frequency: _stringFreqs[index],
-      durationSeconds: ms / 1000,
-      plucked: true,
-    );
-    _pool.play(wav);
+    
+    if (OboeEngine.isAvailable) {
+      OboeEngine.pluck(_stringFreqs[index]);
+    } else {
+      final double ms = beatsToMilliseconds(_selectedDuration.beats);
+      final wav = ToneSynth.generate(
+        frequency: _stringFreqs[index],
+        durationSeconds: ms / 1000,
+        plucked: true,
+      );
+      _pool.play(wav);
+    }
 
     setState(() {
       _lastPluckedIndex = index;
@@ -89,12 +95,16 @@ class _SasandoPageState extends State<SasandoPage> {
       final note = _notes[i];
       final double ms = beatsToMilliseconds(note.duration.beats);
 
-      final wav = ToneSynth.generate(
-        frequency: note.frequency,
-        durationSeconds: ms / 1000,
-        plucked: true,
-      );
-      _pool.play(wav);
+      if (OboeEngine.isAvailable) {
+        OboeEngine.pluck(note.frequency);
+      } else {
+        final wav = ToneSynth.generate(
+          frequency: note.frequency,
+          durationSeconds: ms / 1000,
+          plucked: true,
+        );
+        _pool.play(wav);
+      }
       setState(() => _playingIndex = i);
 
       await Future.delayed(Duration(milliseconds: ms.round()));
