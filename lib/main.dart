@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'audio/oboe_engine.dart';
+import 'plugins/oboe_engine.dart';
 import 'pages/home_page.dart';
 
 Future<void> main() async {

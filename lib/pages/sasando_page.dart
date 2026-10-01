@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../audio/note_duration.dart';
 import '../audio/note_event.dart';
-import '../audio/oboe_engine.dart';
+import '../plugins/oboe_engine.dart';
 import '../audio/player_pool.dart';
 import '../audio/tempo.dart';
 import '../audio/tone_synth.dart';
