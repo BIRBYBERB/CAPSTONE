@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'plugins/oboe_engine.dart';
 import 'pages/home_page.dart';
 
+// Halo
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   

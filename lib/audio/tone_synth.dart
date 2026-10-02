@@ -5,6 +5,7 @@ import 'dart:typed_data';
 /// combo, so no external audio asset files are needed.
 class ToneSynth {
   static final Map<String, Uint8List> _cache = {};
+  static const double _releaseSeconds = 0.12;
 
   static Uint8List generate({
     required double frequency,
@@ -13,11 +14,12 @@ class ToneSynth {
     bool plucked = false,
   }) {
     final String key =
-        '${frequency.toStringAsFixed(2)}_${durationSeconds}_$plucked';
+        '${frequency.toStringAsFixed(2)}_${durationSeconds}_${sampleRate}_$plucked';
     final cached = _cache[key];
     if (cached != null) return cached;
 
-    final int numSamples = (sampleRate * durationSeconds).toInt();
+    final double totalDurationSeconds = durationSeconds + _releaseSeconds;
+    final int numSamples = (sampleRate * totalDurationSeconds).toInt();
     final Int16List samples = Int16List(numSamples);
 
     for (int i = 0; i < numSamples; i++) {
@@ -25,20 +27,29 @@ class ToneSynth {
       double envelope;
 
       if (plucked) {
-        // Sasando: sharp pluck, fast exponential decay (like a plucked string).
-        envelope = math.exp(-4.2 * t);
+        envelope = math.exp(-1.6 * t);
       } else {
-        // Piano: quick attack, slower decay, gentle sustain tail.
-        const double attack = 0.008;
-        if (t < attack) {
+        const double attack = 0.01;
+        if (t < attack && t < durationSeconds) {
           envelope = t / attack;
         } else {
-          envelope = math.exp(-1.8 * (t - attack));
+          envelope = 0.72;
         }
       }
 
+      if (t >= durationSeconds) {
+        final double releaseProgress = ((t - durationSeconds) / _releaseSeconds)
+            .clamp(0.0, 1.0);
+        final double releaseStartEnvelope = plucked
+            ? math.exp(-1.6 * durationSeconds)
+            : 0.72;
+        envelope = (releaseStartEnvelope * math.pow(1 - releaseProgress, 2))
+            .toDouble();
+      }
+
       // A few harmonics blended in for a fuller, less "beepy" timbre.
-      double sample = math.sin(2 * math.pi * frequency * t) * 0.55 +
+      double sample =
+          math.sin(2 * math.pi * frequency * t) * 0.55 +
           math.sin(2 * math.pi * frequency * 2 * t) * 0.22 +
           math.sin(2 * math.pi * frequency * 3 * t) * 0.13 +
           math.sin(2 * math.pi * frequency * 4 * t) * 0.06;

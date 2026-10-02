@@ -1,9 +1,12 @@
-import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
+import '../services/export_file_saver.dart';
+import '../audio/musicxml_exporter.dart';
 import '../audio/note_duration.dart';
 import '../audio/note_event.dart';
 import '../audio/player_pool.dart';
@@ -11,6 +14,7 @@ import '../audio/tempo.dart';
 import '../audio/tone_synth.dart';
 import '../widgets/duration_selector.dart';
 import '../widgets/music_sheet.dart';
+import '../widgets/tempo_controls.dart';
 
 class PianoPage extends StatefulWidget {
   const PianoPage({super.key});
@@ -23,15 +27,39 @@ class _PianoPageState extends State<PianoPage> {
   final PlayerPool _pool = PlayerPool();
   final List<NoteEvent> _notes = [];
   NoteDuration _selectedDuration = NoteDuration.quarter;
+  int _tempoBpm = kBeatsPerMinute;
+  bool _metronomeEnabled = false;
   bool _isPlaying = false;
   int? _playingIndex;
+  final Uint8List _regularMetronomeClick = ToneSynth.generate(
+    frequency: 1000,
+    durationSeconds: 0.04,
+  );
+  final Uint8List _accentMetronomeClick = ToneSynth.generate(
+    frequency: 1500,
+    durationSeconds: 0.04,
+  );
 
   // White keys C4..C5, plus sharps mapped by position.
   static const List<String> _whiteNoteNames = [
-    'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'
+    'C4',
+    'D4',
+    'E4',
+    'F4',
+    'G4',
+    'A4',
+    'B4',
+    'C5',
   ];
   static const List<double> _whiteFreqs = [
-    261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25
+    261.63,
+    293.66,
+    329.63,
+    349.23,
+    392.00,
+    440.00,
+    493.88,
+    523.25,
   ];
   // Black key: (index of white key it sits after, name, frequency)
   static const List<_BlackKeySpec> _blackKeys = [
@@ -43,16 +71,21 @@ class _PianoPageState extends State<PianoPage> {
   ];
 
   void _playNote(String name, double freq) {
-    final double ms = beatsToMilliseconds(_selectedDuration.beats);
+    final double ms = beatsToMilliseconds(
+      _selectedDuration.beats,
+      bpm: _tempoBpm,
+    );
     final wav = ToneSynth.generate(
       frequency: freq,
       durationSeconds: ms / 1000,
       plucked: false,
     );
-    _pool.play(wav);
+    unawaited(_pool.play(wav));
 
     setState(() {
-      _notes.add(NoteEvent(name: name, frequency: freq, duration: _selectedDuration));
+      _notes.add(
+        NoteEvent(name: name, frequency: freq, duration: _selectedDuration),
+      );
     });
   }
 
@@ -64,20 +97,42 @@ class _PianoPageState extends State<PianoPage> {
     if (_notes.isEmpty || _isPlaying) return;
     setState(() => _isPlaying = true);
 
+    double elapsedBeats = 0;
+    int beatIndex = 0;
+    if (_metronomeEnabled) {
+      _playMetronomeClick(beatIndex++);
+    }
+
     for (int i = 0; i < _notes.length; i++) {
       if (!_isPlaying || !mounted) break;
       final note = _notes[i];
-      final double ms = beatsToMilliseconds(note.duration.beats);
+      final int bpm = _tempoBpm;
+      final double ms = beatsToMilliseconds(note.duration.beats, bpm: bpm);
 
       final wav = ToneSynth.generate(
         frequency: note.frequency,
         durationSeconds: ms / 1000,
         plucked: false,
       );
-      _pool.play(wav);
+      await _pool.play(wav);
       setState(() => _playingIndex = i);
 
-      await Future.delayed(Duration(milliseconds: ms.round()));
+      double beatsRemaining = note.duration.beats;
+      while (beatsRemaining > 0 && _isPlaying && mounted) {
+        final double remainder = elapsedBeats % 1;
+        final double beatsToNextTick = remainder < 1e-9 ? 1 : 1 - remainder;
+        final double segmentBeats = math.min(beatsRemaining, beatsToNextTick);
+        final double segmentMs = beatsToMilliseconds(segmentBeats, bpm: bpm);
+
+        await Future.delayed(Duration(milliseconds: segmentMs.round()));
+        elapsedBeats += segmentBeats;
+        beatsRemaining -= segmentBeats;
+
+        if (_metronomeEnabled &&
+            (elapsedBeats - elapsedBeats.round()).abs() < 1e-9) {
+          _playMetronomeClick(beatIndex++);
+        }
+      }
     }
 
     if (mounted) {
@@ -88,6 +143,13 @@ class _PianoPageState extends State<PianoPage> {
     }
   }
 
+  void _playMetronomeClick(int beatIndex) {
+    final click = beatIndex % 4 == 0
+        ? _accentMetronomeClick
+        : _regularMetronomeClick;
+    unawaited(_pool.play(click));
+  }
+
   void _stopPlayback() {
     setState(() => _isPlaying = false);
   }
@@ -95,31 +157,28 @@ class _PianoPageState extends State<PianoPage> {
   Future<void> _saveSheet() async {
     if (_notes.isEmpty) return;
     try {
-      final dir = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}/piano_sheet_$timestamp.txt');
-
-      final buffer = StringBuffer()
-        ..writeln('Music Sheet - Piano')
-        ..writeln('Tempo: $kBeatsPerMinute BPM')
-        ..writeln('Disimpan: ${DateTime.now()}')
-        ..writeln('---');
-      for (final n in _notes) {
-        buffer.writeln(
-            '${n.name}\t${n.frequency.toStringAsFixed(2)} Hz\t${n.duration.label} note (${n.duration.symbol})');
-      }
-      await file.writeAsString(buffer.toString());
+      final xml = MusicXmlExporter.toMusicXml(
+        title: 'Piano',
+        notes: _notes,
+        tempo: _tempoBpm,
+      );
+      final saved = await saveExportFile(
+        fileName: 'piano_sheet_$timestamp.musicxml',
+        mimeType: 'application/vnd.recordare.musicxml+xml',
+        bytes: Uint8List.fromList(utf8.encode(xml)),
+      );
+      if (!saved) return;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tersimpan di ${file.path}')),
+          const SnackBar(content: Text('Partitur berhasil diunduh.')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
       }
     }
   }
@@ -147,12 +206,22 @@ class _PianoPageState extends State<PianoPage> {
               selected: _selectedDuration,
               onChanged: (d) => setState(() => _selectedDuration = d),
             ),
+            const SizedBox(height: 12),
+            TempoControls(
+              tempo: _tempoBpm,
+              onTempoChanged: (tempo) => setState(() => _tempoBpm = tempo),
+              metronomeEnabled: _metronomeEnabled,
+              onMetronomeChanged: (enabled) =>
+                  setState(() => _metronomeEnabled = enabled),
+            ),
             const SizedBox(height: 20),
             Center(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final double keyboardWidth =
-                      math.min(constraints.maxWidth, 560);
+                  final double keyboardWidth = math.min(
+                    constraints.maxWidth,
+                    560,
+                  );
                   final double whiteKeyWidth =
                       keyboardWidth / _whiteFreqs.length;
                   final double keyboardHeight = 320;
@@ -171,12 +240,17 @@ class _PianoPageState extends State<PianoPage> {
                               child: Container(
                                 width: whiteKeyWidth,
                                 height: keyboardHeight,
-                                margin: const EdgeInsets.symmetric(horizontal: 1),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 1,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  border: Border.all(color: Colors.grey.shade400),
+                                  border: Border.all(
+                                    color: Colors.grey.shade400,
+                                  ),
                                   borderRadius: const BorderRadius.vertical(
-                                      bottom: Radius.circular(6)),
+                                    bottom: Radius.circular(6),
+                                  ),
                                 ),
                                 alignment: Alignment.bottomCenter,
                                 padding: const EdgeInsets.only(bottom: 10),
@@ -192,7 +266,7 @@ class _PianoPageState extends State<PianoPage> {
                         ..._blackKeys.map((spec) {
                           final double left =
                               whiteKeyWidth * (spec.afterWhiteIndex + 1) -
-                                  (whiteKeyWidth * 0.3);
+                              (whiteKeyWidth * 0.3);
                           return Positioned(
                             left: left,
                             top: 0,
@@ -204,7 +278,17 @@ class _PianoPageState extends State<PianoPage> {
                                 decoration: BoxDecoration(
                                   color: Colors.black,
                                   borderRadius: const BorderRadius.vertical(
-                                      bottom: Radius.circular(4)),
+                                    bottom: Radius.circular(4),
+                                  ),
+                                ),
+                                alignment: Alignment.bottomCenter,
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  spec.name,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 9,
+                                  ),
                                 ),
                               ),
                             ),

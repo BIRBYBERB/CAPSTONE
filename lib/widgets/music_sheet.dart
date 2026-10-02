@@ -63,10 +63,11 @@ class _MusicSheetViewState extends State<MusicSheetView> {
   void didUpdateWidget(covariant MusicSheetView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final bool notesGrew = widget.notes.length > oldWidget.notes.length;
-    final bool notesCleared = widget.notes.isEmpty && oldWidget.notes.isNotEmpty;
+    final bool notesCleared =
+        widget.notes.isEmpty && oldWidget.notes.isNotEmpty;
     final bool highlightMoved =
         widget.highlightedIndex != oldWidget.highlightedIndex &&
-            widget.highlightedIndex != null;
+        widget.highlightedIndex != null;
 
     if (notesCleared) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,7 +85,11 @@ class _MusicSheetViewState extends State<MusicSheetView> {
     if (widget.highlightedIndex != null) {
       // Keep the note currently being played in view.
       double cumulative = 0;
-      for (int i = 0; i < widget.highlightedIndex! && i < widget.notes.length; i++) {
+      for (
+        int i = 0;
+        i < widget.highlightedIndex! && i < widget.notes.length;
+        i++
+      ) {
         cumulative += MusicSheetView.columnWidthFor(widget.notes[i].duration);
       }
       target = cumulative;
@@ -113,12 +118,15 @@ class _MusicSheetViewState extends State<MusicSheetView> {
       children: [
         Row(
           children: [
-            Text(widget.title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              widget.title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
             TextButton.icon(
-              onPressed:
-                  (widget.notes.isEmpty || widget.isPlaying) ? null : widget.onClear,
+              onPressed: (widget.notes.isEmpty || widget.isPlaying)
+                  ? null
+                  : widget.onClear,
               icon: const Icon(Icons.delete_outline),
               label: const Text('Clear'),
             ),
@@ -131,11 +139,15 @@ class _MusicSheetViewState extends State<MusicSheetView> {
               label: Text(widget.isPlaying ? 'Stop' : 'Play'),
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed:
-                  (widget.notes.isEmpty || widget.isPlaying) ? null : widget.onSave,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save'),
+            Tooltip(
+              message: 'Unduh MusicXML',
+              child: ElevatedButton.icon(
+                onPressed: (widget.notes.isEmpty || widget.isPlaying)
+                    ? null
+                    : widget.onSave,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('XML'),
+              ),
             ),
           ],
         ),
@@ -143,9 +155,18 @@ class _MusicSheetViewState extends State<MusicSheetView> {
         if (widget.notes.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              'Geser untuk melihat semua nada \u2192',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Geser untuk melihat semua nada \u2192',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+                Text(
+                  'Unduh MusicXML untuk membuka atau mencetak partitur di MuseScore.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
             ),
           ),
         Container(
@@ -169,11 +190,15 @@ class _MusicSheetViewState extends State<MusicSheetView> {
                   trackVisibility: true,
                   child: Stack(
                     children: [
-                      Positioned.fill(child: CustomPaint(painter: _GuideLinesPainter())),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _GuideLinesPainter()),
+                      ),
                       SingleChildScrollView(
                         controller: _scrollController,
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.only(bottom: 12), // room for scrollbar
+                        padding: const EdgeInsets.only(
+                          bottom: 12,
+                        ), // room for scrollbar
                         child: Row(
                           children: [
                             for (int i = 0; i < widget.notes.length; i++)
@@ -200,11 +225,10 @@ class _NoteMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double midi = _freqToMidi(note.frequency).clamp(
-      MusicSheetView.minMidi,
-      MusicSheetView.maxMidi,
-    );
-    final double t = (midi - MusicSheetView.minMidi) /
+    final double midi = _freqToMidi(note.frequency)
+        .clamp(MusicSheetView.minMidi, MusicSheetView.maxMidi);
+    final double t =
+        (midi - MusicSheetView.minMidi) /
         (MusicSheetView.maxMidi - MusicSheetView.minMidi);
 
     final double columnWidth = MusicSheetView.columnWidthFor(note.duration);
@@ -223,7 +247,8 @@ class _NoteMarker extends StatelessWidget {
         children: [
           Positioned(
             top: top,
-            left: (columnWidth - markerSize) / 2 -
+            left:
+                (columnWidth - markerSize) / 2 -
                 (isHighlighted ? 3 : 0), // keep centered while growing
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
